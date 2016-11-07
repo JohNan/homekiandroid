@@ -2,208 +2,198 @@ package com.homeki.android.server;
 
 import android.content.Context;
 import android.util.Log;
+
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 import com.homeki.android.misc.Settings;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpDelete;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
 
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class ApiClient {
-	private static final String TAG = ApiClient.class.getSimpleName();
-	private static final Gson GSON = new Gson();
+    private static final String TAG = ApiClient.class.getSimpleName();
+    private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
 
-	private Context context;
+    private final Gson mGson = new Gson();
+    private OkHttpClient mOkHttpClient;
 
-	public ApiClient(Context context) {
-		this.context = context;
-	}
+    private Context context;
 
-	private String getServerUrl() {
-		return "http://" + Settings.getServerUrl(context) + ":" + Settings.getServerPort(context) + "/api";
-	}
+    public ApiClient(Context context) {
+        this.context = context;
+        mOkHttpClient = new OkHttpClient();
+    }
 
-	public List<JsonDevice> getDevices() {
-		Log.i(TAG, "Fetching all devices.");
-		return get(getServerUrl() + "/devices", new TypeToken<List<JsonDevice>>(){}.getType());
-	}
+    private String getServerUrl() {
+        return "http://" + Settings.getServerUrl(context) + ":" + Settings.getServerPort(context) + "/api";
+    }
 
-	public List<JsonActionGroup> getActionGroups() {
-		Log.i(TAG, "Fetching all action groups.");
-		return get(getServerUrl() + "/actiongroups", new TypeToken<List<JsonActionGroup>>(){}.getType());
-	}
+    public List<JsonDevice> getDevices() {
+        Log.i(TAG, "Fetching all devices.");
+        return get(getServerUrl() + "/devices", new TypeToken<List<JsonDevice>>() {
+        }.getType());
+    }
 
-	public void triggerActionGroup(int id) {
-		Log.i(TAG, "Triggering action group " + id + ".");
-		get(getServerUrl() + "/actiongroups/" + id + "/trigger", null);
-	}
+    public List<JsonActionGroup> getActionGroups() {
+        Log.i(TAG, "Fetching all action groups.");
+        return get(getServerUrl() + "/actiongroups", new TypeToken<List<JsonActionGroup>>() {
+        }.getType());
+    }
 
-	public LatLng getServerLocation() {
-		Log.i(TAG, "Fetching server location.");
-		JsonServer server = get(getServerUrl() + "/server", JsonServer.class);
-		return new LatLng(server.locationLatitude, server.locationLongitude);
-	}
+    public void triggerActionGroup(int id) {
+        Log.i(TAG, "Triggering action group " + id + ".");
+        get(getServerUrl() + "/actiongroups/" + id + "/trigger", null);
+    }
 
-	public void registerClient(String id) {
-		Log.i(TAG, "Registering client " + id + ".");
-		post(getServerUrl() + "/clients", new JsonClient(id));
-	}
+    public LatLng getServerLocation() {
+        Log.i(TAG, "Fetching server location.");
+        JsonServer server = get(getServerUrl() + "/server", JsonServer.class);
+        return new LatLng(server.locationLatitude, server.locationLongitude);
+    }
 
-	public void unregisterClient(String id) {
-		Log.i(TAG, "Unregistering client " + id + ".");
-		delete(getServerUrl() + "/clients/" + id);
-	}
+    public void registerClient(String id) {
+        Log.i(TAG, "Registering client " + id + ".");
+        post(getServerUrl() + "/clients", new JsonClient(id));
+    }
 
-	public void setChannelValueForDevice(int deviceId, int channelId, int value) {
-		Log.i(TAG, "Setting channel " + channelId + " for device " + deviceId + " to " + value + ".");
-		post(getServerUrl() + "/devices/" + deviceId + "/channels/" + channelId, new JsonChannelValue(value));
-	}
+    public void unregisterClient(String id) {
+        Log.i(TAG, "Unregistering client " + id + ".");
+        delete(getServerUrl() + "/clients/" + id);
+    }
 
-	private void post(String url, Object data) {
-		HttpClient httpClient = new DefaultHttpClient();
-		HttpPost httpPost = new HttpPost(url);
-		httpPost.setHeader("Content-Type", "application/json; charset=utf-8");
+    public void setChannelValueForDevice(int deviceId, int channelId, int value) {
+        Log.i(TAG, "Setting channel " + channelId + " for device " + deviceId + " to " + value + ".");
+        post(getServerUrl() + "/devices/" + deviceId + "/channels/" + channelId, new JsonChannelValue(value));
+    }
 
-		try {
-			httpPost.setEntity(new StringEntity(GSON.toJson(data)));
-			HttpResponse response = httpClient.execute(httpPost);
+    private void post(String url, Object data) {
+        Request request = new Request.Builder()
+                .url(url)
+                .post(RequestBody.create(MEDIA_TYPE_JSON, mGson.toJson(data)))
+                .build();
 
-			int statusCode = response.getStatusLine().getStatusCode();
-			switch (statusCode) {
-				case 200:
-				case 201:
-					finish(response);
-					return;
-				default:
-					finish(response);
-					throw new RuntimeException("Unhandled response code " + statusCode + ".");
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            int statusCode = response.code();
+            switch (statusCode) {
+                case 200:
+                case 201:
+                    return;
+                default:
+                    throw new RuntimeException("Unhandled response code " + statusCode + ".");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-	private <T> T get(String url, Type type) {
-		HttpClient httpClient = new DefaultHttpClient();
-		HttpGet httpGet = new HttpGet(url);
+    private <T> T get(String url, Type type) {
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
 
-		try {
-			HttpResponse response = httpClient.execute(httpGet);
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            int statusCode = response.code();
+            switch (statusCode) {
+                case 200:
+                    if (type == null) {
+                        return null;
+                    } else {
+                        return mGson.fromJson(response.body().string(), type);
+                    }
+                default:
+                    throw new RuntimeException("Unhandled response code " + statusCode + ".");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-			int statusCode = response.getStatusLine().getStatusCode();
-			switch (statusCode) {
-				case 200:
-					if (type == null) {
-						finish(response);
-						return null;
-					} else {
-						String json = EntityUtils.toString(response.getEntity());
-						return GSON.fromJson(json, type);
-					}
-				default:
-					finish(response);
-					throw new RuntimeException("Unhandled response code " + statusCode + ".");
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+    private void delete(String url) {
+        Request request = new Request.Builder()
+                .url(url)
+                .delete()
+                .build();
 
-	private void delete(String url) {
-		HttpClient httpClient = new DefaultHttpClient();
-		HttpDelete httpDelete = new HttpDelete(url);
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            int statusCode = response.code();
+            switch (statusCode) {
+                case 200:
+                case 201:
+                    return;
+                default:
+                    throw new RuntimeException("Unhandled response code " + statusCode + ".");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-		try {
-			HttpResponse response = httpClient.execute(httpDelete);
+    private static class JsonServer {
+        public double locationLatitude;
+        public double locationLongitude;
+        public String name;
+    }
 
-			int statusCode = response.getStatusLine().getStatusCode();
-			switch (statusCode) {
-				case 200:
-				case 201:
-					finish(response);
-					return;
-				default:
-					finish(response);
-					throw new RuntimeException("Unhandled response code " + statusCode + ".");
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public static enum DeviceType {
+        @SerializedName("switch")
+        SWITCH,
 
-	private void finish(HttpResponse response) throws IOException {
-		if (response.getEntity() == null) return;
-		// consumeContent() will be renamed to finish() in next major, as it actually releases all resources
-		// and allows the underlying http connection to be reused.
-		// http://developer.android.com/reference/org/apache/http/HttpEntity.html#consumeContent()
-		response.getEntity().consumeContent();
-	}
+        @SerializedName("switchmeter")
+        SWITCH_METER,
 
-	private static class JsonServer {
-		public double locationLatitude;
-		public double locationLongitude;
-		public String name;
-	}
+        @SerializedName("dimmer")
+        DIMMER,
 
-	public static enum DeviceType {
-		@SerializedName("switch")
-		SWITCH,
+        @SerializedName("thermometer")
+        THERMOMETER
+    }
 
-		@SerializedName("switchmeter")
-		SWITCH_METER,
+    public static class JsonDevice {
+        public DeviceType type;
+        public int deviceId;
+        public String name;
+        public String description;
+        public String added;
+        public boolean active;
+        public List<JsonDeviceChannel> channels;
+    }
 
-		@SerializedName("dimmer")
-		DIMMER,
+    public static class JsonDeviceChannel {
+        public int id;
+        public String name;
+        public Number lastValue;
+    }
 
-		@SerializedName("thermometer")
-		THERMOMETER
-	}
+    public static class JsonActionGroup {
+        public int actionGroupId;
+        public String name;
+    }
 
-	public static class JsonDevice {
-		public DeviceType type;
-		public int deviceId;
-		public String name;
-		public String description;
-		public String added;
-		public boolean active;
-		public List<JsonDeviceChannel> channels;
-	}
+    private static class JsonClient {
+        public String id;
 
-	public static class JsonDeviceChannel {
-		public int id;
-		public String name;
-		public Number lastValue;
-	}
+        public JsonClient(String id) {
+            this.id = id;
+        }
+    }
 
-	public static class JsonActionGroup {
-		public int actionGroupId;
-		public String name;
-	}
+    private static class JsonChannelValue {
+        public int value;
 
-	private static class JsonClient {
-		public String id;
-
-		public JsonClient(String id) {
-			this.id = id;
-		}
-	}
-
-	private static class JsonChannelValue {
-		public int value;
-
-		public JsonChannelValue(int value) {
-			this.value = value;
-		}
-	}
+        public JsonChannelValue(int value) {
+            this.value = value;
+        }
+    }
 }
