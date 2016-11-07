@@ -120,6 +120,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        drawerLayout.closeDrawers();
         switch (item.getItemId()) {
             case R.id.menu_device:
                 showDevices();
@@ -137,9 +138,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void getServerInfo() {
-        new AsyncTask<Void, Void, ApiClient.JsonServerInfo>() {
+        new AsyncTask<Void, Void, ApiClient.JsonServer>() {
             @Override
-            protected ApiClient.JsonServerInfo doInBackground(Void... params) {
+            protected ApiClient.JsonServer doInBackground(Void... params) {
                 try {
                     return mApiClient.getServerInfo();
                 } catch (Exception e1) {
@@ -164,7 +165,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
 
             @Override
-            protected void onPostExecute(ApiClient.JsonServerInfo jsonServerInfo) {
+            protected void onPostExecute(ApiClient.JsonServer jsonServerInfo) {
                 if(jsonServerInfo != null && mHeaderTitle != null) {
                     mHeaderTitle.setText(jsonServerInfo.name);
                 }

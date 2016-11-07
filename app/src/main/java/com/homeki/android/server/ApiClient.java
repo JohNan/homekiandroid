@@ -43,10 +43,10 @@ public class ApiClient {
         }.getType());
     }
 
-    public JsonServerInfo getServerInfo() {
-        Log.i(TAG, "Fetching server info");
-        return get(getServerUrl() + "/server", new TypeToken<JsonServerInfo>() {
-        }.getType());
+    public JsonServer getServerInfo() {
+        Log.i(TAG, "Fetching server info.");
+        JsonServer server = get(getServerUrl() + "/server", JsonServer.class);
+        return server;
     }
 
     public List<JsonActionGroup> getActionGroups() {
@@ -106,9 +106,9 @@ public class ApiClient {
         Request request = new Request.Builder()
                 .url(url)
                 .build();
-
+        Response response = null;
         try {
-            Response response = mOkHttpClient.newCall(request).execute();
+            response = mOkHttpClient.newCall(request).execute();
             int statusCode = response.code();
             switch (statusCode) {
                 case 200:
@@ -122,6 +122,10 @@ public class ApiClient {
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            if(response != null && response.body() != null) {
+                response.body().close();
+            }
         }
     }
 
@@ -146,7 +150,7 @@ public class ApiClient {
         }
     }
 
-    private static class JsonServer {
+    public static class JsonServer {
         public double locationLatitude;
         public double locationLongitude;
         public String name;
