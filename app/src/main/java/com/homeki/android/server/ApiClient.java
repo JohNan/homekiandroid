@@ -43,6 +43,12 @@ public class ApiClient {
         }.getType());
     }
 
+    public JsonServerInfo getServerInfo() {
+        Log.i(TAG, "Fetching server info");
+        return get(getServerUrl() + "/server", new TypeToken<JsonServerInfo>() {
+        }.getType());
+    }
+
     public List<JsonActionGroup> getActionGroups() {
         Log.i(TAG, "Fetching all action groups.");
         return get(getServerUrl() + "/actiongroups", new TypeToken<List<JsonActionGroup>>() {
@@ -168,6 +174,23 @@ public class ApiClient {
         public String added;
         public boolean active;
         public List<JsonDeviceChannel> channels;
+    }
+
+    public static class JsonServerInfo {
+        public int uptimeMs;
+        public int timeMs;
+        public String time;
+        public String version;
+        public String name;
+        public String hostname;
+        public float locationLatitude;
+        public float locationLongitude;
+        public String smtpHost;
+        public int smtpPort;
+        public boolean smtpAuth;
+        public boolean smtpTls;
+        public String smtpUser;
+        public String smtpPassword;
     }
 
     public static class JsonDeviceChannel {

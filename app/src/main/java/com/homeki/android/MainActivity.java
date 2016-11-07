@@ -1,6 +1,7 @@
 package com.homeki.android;
 
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
@@ -11,13 +12,24 @@ import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
+
+import com.homeki.android.misc.Settings;
+import com.homeki.android.server.ApiClient;
+import com.homeki.android.server.ServerLocator;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+    private static final String TAG = MainActivity.class.getSimpleName();
     private DrawerLayout drawerLayout;
     private ActionBarDrawerToggle drawerToggle;
     private MenuOption selectedMenuItem;
     private NavigationView mNavigationView;
+    private ApiClient mApiClient;
+    private View mHeaderLlayout;
+    private TextView mHeaderTitle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,12 +53,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         mNavigationView = (NavigationView) findViewById(R.id.navigation_view);
         mNavigationView.setNavigationItemSelectedListener(this);
+        mHeaderLlayout = mNavigationView.getHeaderView(0);
+
+        if(mHeaderLlayout != null) {
+            mHeaderTitle = (TextView) mHeaderLlayout.findViewById(R.id.textview_title_drawer_header);
+        }
 
         selectedMenuItem = MenuOption.DEVICES;
         if (savedInstanceState != null && savedInstanceState.containsKey("selectedMenuItem")) {
             selectedMenuItem = MenuOption.valueOf(savedInstanceState.getString("selectedMenuItem"));
         }
 
+        mApiClient = new ApiClient(this);
+
+        getServerInfo();
         updateFragment();
     }
 
@@ -114,6 +134,42 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         }
         return false;
+    }
+
+    private void getServerInfo() {
+        new AsyncTask<Void, Void, ApiClient.JsonServerInfo>() {
+            @Override
+            protected ApiClient.JsonServerInfo doInBackground(Void... params) {
+                try {
+                    return mApiClient.getServerInfo();
+                } catch (Exception e1) {
+                    Log.e(TAG, "Failed to get devices, trying to locate on wifi.", e1);
+
+                    try {
+                        String hostname = ServerLocator.locateServerOnWifi();
+                        Settings.setServerUrl(MainActivity.this, hostname);
+                    } catch (Exception e2) {
+                        Log.e(TAG, "Failed to locate server on wifi, giving up.", e2);
+                        return null;
+                    }
+
+                    try {
+                        Log.i(TAG, "Retrying device fetch using server located on wifi.");
+                        return mApiClient.getServerInfo();
+                    } catch (Exception e2) {
+                        Log.e(TAG, "Failed to get devices.", e2);
+                        return null;
+                    }
+                }
+            }
+
+            @Override
+            protected void onPostExecute(ApiClient.JsonServerInfo jsonServerInfo) {
+                if(jsonServerInfo != null && mHeaderTitle != null) {
+                    mHeaderTitle.setText(jsonServerInfo.name);
+                }
+            }
+        }.execute();
     }
 
     protected enum MenuOption {
