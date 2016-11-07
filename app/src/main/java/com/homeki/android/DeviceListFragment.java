@@ -68,7 +68,7 @@ public class DeviceListFragment extends ListFragment {
 			protected void onPostExecute(List<ApiClient.JsonDevice> jsonDevices) {
 				progressDialog.dismiss();
 
-				if (jsonDevices == null) {
+				if (jsonDevices == null && getActivity() != null) {
 					Toast.makeText(getActivity(), "Failed to get devices. Check server settings.", Toast.LENGTH_LONG).show();
 					return;
 				}
